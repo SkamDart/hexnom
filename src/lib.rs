@@ -1,9 +1,14 @@
+#![feature(specialization)]
+
 use nom::{
     bytes::complete::{tag, take_while_m_n},
     combinator::map_res,
     sequence::tuple,
     IResult,
 };
+
+use pyo3::prelude::*;
+use pyo3::wrap_pyfunction;
 
 #[derive(Debug, PartialEq)]
 pub struct Color {
@@ -34,6 +39,21 @@ pub fn nom_hex_color(input: &str) -> IResult<&str, Color> {
 pub fn hex_color(input: String) -> Result<Color, String> {
     let (_, color) = nom_hex_color(&input).map_err(|e| e.to_string())?;
     Ok(color)
+}
+
+#[pyfunction]
+fn hex_color_py(input: String) -> PyResult<(u8, u8, u8)> {
+    let Color { red, green, blue } =
+        hex_color(input).map_err(|e| PyErr::new::<pyo3::exceptions::PyTypeError, _>(e))?;
+    Ok((red, green, blue))
+}
+
+#[pymodule]
+fn hexnom(_py: Python, m: &PyModule) -> PyResult<()> {
+    // Parse Hex Color from String
+    m.add_function(wrap_pyfunction!(hex_color_py, m)?)?;
+
+    Ok(())
 }
 
 #[cfg(test)]
