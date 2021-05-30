@@ -24,11 +24,16 @@ fn hex_primary(input: &str) -> IResult<&str, u8> {
     map_res(take_while_m_n(2, 2, is_hex_digit), from_hex)(input)
 }
 
-pub fn hex_color(input: &str) -> IResult<&str, Color> {
+pub fn nom_hex_color(input: &str) -> IResult<&str, Color> {
     let (input, _) = tag("#")(input)?;
     let (input, (red, green, blue)) = tuple((hex_primary, hex_primary, hex_primary))(input)?;
 
     Ok((input, Color { red, green, blue }))
+}
+
+pub fn hex_color(input: String) -> Result<Color, String> {
+    let (_, color) = nom_hex_color(&input).map_err(|e| e.to_string())?;
+    Ok(color)
 }
 
 #[cfg(test)]
@@ -38,7 +43,7 @@ mod tests {
     #[test]
     fn parse_color() {
         assert_eq!(
-            hex_color("#2F14DF"),
+            nom_hex_color("#2F14DF"),
             Ok((
                 "",
                 Color {
