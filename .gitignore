@@ -2,3 +2,4 @@
 Cargo.lock
 *.so
 hexnom-main
+hexnom.so
