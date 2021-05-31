@@ -17,3 +17,8 @@ clean:
 
 run: release
 	python3 $(pydir)/main.py
+
+run-cpp:
+	cargo build
+	g++ cpp/main.cc -o hexnom-main -Iinclude -L. -l:target/debug/libhexnom.so
+	./hexnom-main

@@ -1,4 +1,4 @@
-#![feature(specialization)]
+#![feature(min_specialization)]
 
 use nom::{
     bytes::complete::{tag, take_while_m_n},
@@ -7,10 +7,16 @@ use nom::{
     IResult,
 };
 
+#[cfg(feature = "python")]
 use pyo3::prelude::*;
+#[cfg(feature = "python")]
 use pyo3::wrap_pyfunction;
 
-#[derive(Debug, PartialEq)]
+use libc::{c_char, c_int};
+use std::ffi::CString;
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[repr(C)]
 pub struct Color {
     pub red: u8,
     pub green: u8,
@@ -41,6 +47,65 @@ pub fn hex_color(input: String) -> Result<Color, String> {
     Ok(color)
 }
 
+#[repr(C)]
+pub struct ResultCTransport<T: Copy + Clone> {
+    pub is_ok: bool,
+    pub err_msg: *mut c_char,
+    pub err_len: c_int,
+    pub data: *mut T,
+}
+
+/// Destructor for the error message strings return from ResultCTransport types
+/// across the FFI.
+#[no_mangle]
+pub unsafe extern "C" fn destroy_err_msg(err_msg: *mut c_char) {
+    if err_msg.is_null() {
+        return;
+    }
+
+    let c_string = CString::from_raw(err_msg);
+
+    drop(c_string);
+}
+
+#[no_mangle]
+pub extern "C" fn hex_color_c(input: *const c_char) -> ResultCTransport<Color> {
+    if input.is_null() {
+        let msg = "FFI could not parse null input";
+        let err = CString::new(msg).unwrap();
+        ResultCTransport {
+            is_ok: false,
+            err_msg: err.into_raw(),
+            err_len: msg.len() as c_int,
+            data: std::ptr::null_mut(),
+        }
+    } else {
+        // In a "real" scenario, we wouldn't want to cut corners like this.
+        let input = unsafe { std::ffi::CStr::from_ptr(input) }
+            .to_str()
+            .expect("Failed to convert to str")
+            .to_string();
+        match hex_color(input.clone()) {
+            Ok(color) => ResultCTransport {
+                is_ok: true,
+                err_msg: std::ptr::null_mut(),
+                err_len: 0,
+                data: Box::into_raw(Box::new(color)),
+            },
+            Err(e) => {
+                let err = CString::new(e.clone()).unwrap();
+                ResultCTransport {
+                    is_ok: false,
+                    err_msg: err.into_raw(),
+                    err_len: e.len() as c_int,
+                    data: std::ptr::null_mut(),
+                }
+            }
+        }
+    }
+}
+
+#[cfg(feature = "python")]
 #[pyfunction]
 fn hex_color_py(input: String) -> PyResult<(u8, u8, u8)> {
     let Color { red, green, blue } =
@@ -48,6 +113,7 @@ fn hex_color_py(input: String) -> PyResult<(u8, u8, u8)> {
     Ok((red, green, blue))
 }
 
+#[cfg(feature = "python")]
 #[pymodule]
 fn hexnom(_py: Python, m: &PyModule) -> PyResult<()> {
     // Parse Hex Color from String

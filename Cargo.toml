@@ -7,9 +7,14 @@ edition = "2018"
 name = "hexnom"
 crate-type = ["cdylib", "rlib"]
 
+[features]
+python = ["pyo3"]
+
 [dependencies]
+libc = "0.2.95"
 nom = "6.1.2"
 
 [dependencies.pyo3]
+optional = true
 version = "0.13.2"
 features = ["extension-module"]
